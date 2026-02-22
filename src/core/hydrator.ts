@@ -2,30 +2,45 @@ import fs from 'fs';
 import path from 'path';
 
 export async function hydrateContext(paths: string[]): Promise<string> {
-  let fullContext = "";
+  let context = "";
 
-  for (const p of paths) {
-    const absolutePath = path.resolve(p);
+  const walk = (dir: string): string[] => {
+    let results: string[] = [];
+    const list = fs.readdirSync(dir);
     
-    if (fs.existsSync(absolutePath)) {
-      const stats = fs.statSync(absolutePath);
+    list.forEach(file => {
+      const fullPath = path.join(dir, file);
+      const stat = fs.statSync(fullPath);
       
-      if (stats.isDirectory()) {
-        // Grab all files in the directory (recursive)
-        const files = getAllFiles(absolutePath);
-        for (const file of files) {
-          if (file.endsWith('.ts') || file.endsWith('.tsx')) {
-            const content = fs.readFileSync(file, 'utf-8');
-            fullContext += `\n--- FILE: ${file} ---\n${content}\n`;
-          }
+      if (stat && stat.isDirectory()) {
+        // Stoic Rule: Ignore noise folders
+        if (!['node_modules', '.git', 'dist', '.next'].includes(file)) {
+          results = results.concat(walk(fullPath));
         }
       } else {
-        const content = fs.readFileSync(absolutePath, 'utf-8');
-        fullContext += `\n--- FILE: ${p} ---\n${content}\n`;
+        // Only target code files
+        if (/\.(ts|tsx|js|jsx|dev|md)$/.test(file)) {
+          results.push(fullPath);
+        }
       }
+    });
+    return results;
+  };
+
+  for (const p of paths) {
+    try {
+      const stats = fs.statSync(p);
+      const targetFiles = stats.isDirectory() ? walk(p) : [p];
+
+      for (const file of targetFiles) {
+        const content = fs.readFileSync(file, 'utf-8');
+        context += `\n--- FILE: ${file} ---\n${compactCode(content)}\n`;
+      }
+    } catch (err: any) {
+      context += `\n⚠️ HYDRATION ERROR [${p}]: ${err.message}\n`;
     }
   }
-  return fullContext;
+  return context;
 }
 
 function getAllFiles(dirPath: string, arrayOfFiles: string[] = []) {

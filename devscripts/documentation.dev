@@ -1,0 +1,9 @@
+@role Technical Architect
+@vibe Professional and comprehensive
+@rule Include sections for: Installation, Usage, @Keywords, and File Structure
+@use src/
+
+@task
+Analyze the code context. Update the README.md to 
+fully document the DevScript Engine v2.0. Ensure 
+the new directory hydration feature is explained.

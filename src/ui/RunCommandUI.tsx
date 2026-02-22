@@ -160,6 +160,12 @@ export const RunCommandUI = ({ filePath }: { filePath: string }) => {
       return <ErrorPanel message={aiResponse} />;
     }
 
+
+  if (tokenEstimate > 100000) {
+    setAiResponse("❌ CONTEXT OVERLOAD: Your 'src' folder is too large. Use specific files instead of the whole directory.");
+    return;
+  }
+
   // --- 5. THE VIEW ---
   if (loading) return <Text color="yellow">◈ Loading DevScript Context...</Text>;
 
