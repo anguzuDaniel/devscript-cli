@@ -9,7 +9,12 @@
     // See also https://aka.ms/tsconfig/module
     "module": "nodenext",
     "target": "esnext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "outDir": "dist",
     "types": [],
+    "allowJs": true,
+    "noEmit": true,
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
@@ -43,6 +48,8 @@
   },
   "ts-node": {
     "esm": true,
-    "experimentalSpecifierResolution": "node"
-  }
+    "experimentalSpecifierResolution": "node",
+    "transpileOnly": true
+  },
+  "include": ["src/**/*", "bin/**/*", "devscript.js"],
 }

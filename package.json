@@ -5,11 +5,11 @@
   "description": "A prompting language for software Devs & Engineers",
   "main": "bin/index.ts",
   "bin": {
-    "devscript": "./bin/index.ts"
+    "dev": "./devscript.js"
   },
   "scripts": {
-    "dev": "node --loader ts-node/esm bin/index.ts run test.dev",
-    "watch": "node --loader ts-node/esm --watch bin/index.ts run test.dev",
+    "dev": "node --no-warnings --loader ts-node/esm bin/index.ts",
+    "init": "node --no-warnings --loader ts-node/esm bin/index.ts init",
     "build": "tsc"
   },
   "repository": {
@@ -24,16 +24,31 @@
     "commander": "^11.0.0",
     "dotenv": "^17.3.1",
     "ink": "^4.0.0",
+    "ink-spinner": "^5.0.0",
     "react": "^18.0.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^29.0.0",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-typescript": "^12.3.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.0.0",
+    "rollup": "^4.59.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "pkg": {
+    "assets": [
+      "dist/**/*",
+      "node_modules/ink/**/*"
+    ],
+    "targets": [
+      "node18-macos-x64"
+    ]
   }
 }
