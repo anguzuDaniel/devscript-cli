@@ -16,6 +16,12 @@ export const RunCommandUI = ({ filePath }: { filePath: string }) => {
   const [isThinking, setIsThinking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState("");
+  const [tokenEstimate, setTokenEstimate] = useState(0);
+
+  useEffect(() => {
+    // Rough estimate: 4 chars = 1 token
+    setTokenEstimate(Math.ceil(hydratedCode.length / 4));
+  }, [hydratedCode]);
 
   // --- 1. THE AGENT: Apply Changes logic ---
   const applyChanges = useCallback((response: string) => {
@@ -179,6 +185,16 @@ export const RunCommandUI = ({ filePath }: { filePath: string }) => {
 
           <Box marginTop={1}>
             <Text color="cyan">Context: {hydratedCode.length} ch</Text>
+          </Box>
+
+          <Box marginTop={1} flexDirection="column" borderStyle="classic" borderColor="yellow">
+            <Text color="yellow" bold> ⚡ MENTAL ENERGY </Text>
+            <Text> Chars: {hydratedCode.length.toLocaleString()} </Text>
+            <Text> Tokens: ~{tokenEstimate.toLocaleString()} </Text>
+            
+            {tokenEstimate > 30000 && (
+              <Text color="red" backgroundColor="white"> ⚠️ HIGH LOAD </Text>
+            )}
           </Box>
         </Box>
 

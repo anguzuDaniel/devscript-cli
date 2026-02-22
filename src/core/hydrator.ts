@@ -39,3 +39,10 @@ function getAllFiles(dirPath: string, arrayOfFiles: string[] = []) {
   });
   return arrayOfFiles;
 }
+
+export function compactCode(code: string): string {
+  return code
+    .replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1') // Remove comments
+    .replace(/\n\s*\n/g, '\n')                             // Remove empty lines
+    .trim();
+}

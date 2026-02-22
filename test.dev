@@ -1,9 +1,0 @@
-@role Stoic Senior Architect
-@vibe High-density, professional
-@rule Use arrow functions for all components.
-
-@use src/core/parser.ts
-
-@task
-The current parser doesn't handle multi-line tasks very well. 
-Rewrite the loop in parser.ts to be more robust.
