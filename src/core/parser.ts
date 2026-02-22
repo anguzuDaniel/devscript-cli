@@ -3,6 +3,7 @@ export interface DevScriptData {
   vibe: string;
   tech: string[]; // Optional: For future use if we want to explicitly capture tech stack
   rules: string[];
+  tests: string[];
   contextFiles: string[];
   task: string;
 }
@@ -14,6 +15,7 @@ export function parseDevScript(content: string): DevScriptData {
     vibe: '',
     tech: [],
     rules: [],
+    tests: [],
     contextFiles: [],
     task: ''
   };

@@ -1,34 +1,47 @@
 import type { DevScriptData } from './parser.js';
 
 /**
- * Builds the final structured prompt for the Gemini API.
- * Uses the v2 'DevScriptData' interface for strict typing.
+ * Translates parsed DevScript tags into a structured LLM prompt.
  */
 export function buildFinalPrompt(data: DevScriptData, hydratedCode: string): string {
-  // Use fallbacks to prevent "undefined" appearing in the prompt
-  const role = data.role || "Senior Software Engineer";
-  const vibe = data.vibe || "Stoic, concise, and professional";
-  const rules = data.rules && data.rules.length > 0 
-    ? data.rules.map(r => `- ${r}`).join('\n') 
-    : "- Follow standard clean code principles.";
+  
+  // 1. Logic for @rule (Mapping user constraints)
+  const userRules = data.rules.length > 0 
+    ? data.rules.map(r => `• ${r}`).join('\n') 
+    : "Follow standard clean code principles.";
 
+  // 2. Logic for @test (Defining behavioral anchors)
+  const testScenarios = data.tests && data.tests.length > 0
+    ? `\n# LOGIC VALIDATION (TEST CASES)\n${data.tests.map(t => `[ASSERT]: ${t}`).join('\n')}`
+    : "";
+
+  // 3. Logic for Anti-Patterns (Standard Novus Consultancy guardrails)
+  const antiPatterns = [
+    "Do not use 'any' in TypeScript; use strict interfaces.",
+    "Avoid nested if-statements; use early returns.",
+    "Do not provide conversational 'fluff'—provide code only."
+  ].map(ap => `[BLOCK]: ${ap}`).join('\n');
+
+  // 4. Assemble the "Mental Model" for Gemini
   return `
-# ROLE
-${role}
+    # ROLE & VIBE
+    Act as: ${data.role || 'Senior Architect'}.
+    Tone: ${data.vibe || 'Stoic, concise, professional'}.
 
-# STYLE & VIBE
-${vibe}
+    # CONSTRAINTS & RULES
+    ${userRules}
 
-# CONSTRAINTS & RULES
-${rules}
-- Use <file path="RELATIVE_PATH">CODE</file> tags for all file modifications.
+    # FORBIDDEN PATTERNS
+    ${antiPatterns}
+    ${testScenarios}
 
-# CODE CONTEXT
-${hydratedCode}
+    # PROJECT CONTEXT
+    The following code has been hydrated from your @use directives:
+    ${hydratedCode}
 
-# YOUR TASK
-${data.task || "No task provided. Analyze the code context above."}
+    # OBJECTIVE
+    ${data.task || "Analyze context and provide architectural feedback."}
 
-Please provide the code solution directly within the specified file tags without conversational filler.
-  `.trim();
+    MANDATORY: Return solution in <file path="RELATIVE_PATH">CODE</file> blocks.
+    `.trim();
 }
