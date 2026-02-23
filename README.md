@@ -1,117 +1,138 @@
-# DevScript Engine v2.0
+# DevScript Engine v2.0 🚀
 
-The DevScript Engine is a powerful CLI tool designed to facilitate AI-driven code generation and architectural analysis. It acts as an intelligent agent, interpreting declarative `.dev` scripts to orchestrate interactions with large language models (LLMs), hydrate project context, and apply generated changes directly to your codebase.
+**DevScript** is a high-performance prompting language and CLI engine designed specifically for software engineers. It bridges the gap between raw LLMs and complex codebases by providing a declarative way to manage context, enforce architectural rules, and prevent AI hallucinations.
 
-## Installation
+## 🎯 Why DevScript?
 
-To get started with the DevScript Engine, ensure you have Node.js (v18.x or higher recommended) installed on your system.
+Traditional prompting often fails in engineering because of "context noise" and "instruction drift." DevScript solves this through:
 
-1.  **Global Installation:**
-    ```bash
-    npm install -g devscript
-    ```
+*   **Multi-Provider Support**: Choose between **Gemini**, **OpenAI**, or **Ollama** (local).
+*   **Secure Authentication**: Built-in Google OAuth2 and encrypted credential storage.
+*   **Deterministic Context**: Use `@use` to recursively hydrate only the relevant parts of your codebase, automatically stripping comments and whitespace to save tokens.
+*   **Hallucination Guards**: Built-in `@guard` directives force the AI into a "Strict Mode," preventing it from inventing code or making assumptions.
+*   **Strict Execution**: Directives like `@not`, `@limit`, and `@format` ensure the AI acts as a surgical tool, not a conversational chatbot.
+*   **Closed-Loop Application**: Review AI-generated changes in a TUI and apply them directly to your filesystem with a single keystroke.
 
-2.  **API Key Configuration:**
-    The DevScript Engine requires a Google Gemini API key to interact with the language model. You can provide this key in one of two ways:
+---
 
-    *   **Environment Variable (Recommended):** Set `GEMINI_API_KEY` in your shell environment or a `.env` file in your project root:
-        ```bash
-        export GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
-        # Or in a .env file:
-        # GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
-        ```
-    *   **Configuration File:** Create a directory `~/.devscript` in your home directory and a `config.json` file inside it:
-        ```bash
-        mkdir -p ~/.devscript
-        echo '{ "apiKey": "YOUR_GEMINI_API_KEY" }' > ~/.devscript/config.json
-        ```
+## ⚙️ Installation
 
-    You can also specify a different Gemini model by setting the `GEMINI_MODEL` environment variable (e.g., `GEMINI_MODEL="gemini-1.5-pro"`). The default is `gemini-2.5-flash`.
-
-## Usage
-
-The DevScript Engine is invoked via the `devscript` command, followed by the path to your DevScript file.
-
+### 1. Global Installation
+Ensure you have **Node.js v18+** installed.
 ```bash
-devscript <path-to-your-script.dev> [options]
+git clone https://github.com/anguzuDaniel/devscript-cli.git
+cd devscript-cli
+npm install
+npm run build
+npm link
 ```
 
-**Options:**
+### 2. Configure Authentication
+DevScript now supports robust authentication for multiple providers.
 
-*   `--image`, `-i`: Include a temporary vision image (`temp_vision.png`) for multimodal processing. This file must exist in the current working directory.
-    ```bash
-    devscript analyze_image.dev --image
-    ```
+#### **Google Gemini (Recommended)**
+Authenticate via Google OAuth2 for a seamless experience:
+```bash
+devscript login
+```
+*Note: Ensure `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set in your environment.*
 
-**Interactive UI:**
-Upon execution, the DevScript Engine launches an interactive terminal UI powered by `ink`.
+#### **OpenAI**
+Set your OpenAI API key:
+```bash
+devscript config set-key openai YOUR_OPENAI_API_KEY
+```
 
-*   **`[Enter]` (Run):** Triggers the AI generation process based on the DevScript and hydrated context.
-*   **`[a]` (Apply):** Parses the AI's response for `<file path="...">` tags and applies the generated code changes to your filesystem.
-*   **`[q]` (Quit):** Exits the DevScript Engine.
-*   **`[s]` (Save):** Placeholder for future functionality (e.g., saving session logs or prompts).
+#### **Switching Engines**
+Switch between providers at any time:
+```bash
+devscript config set-engine gemini  # Options: gemini, openai, ollama
+```
 
-## @Keywords (DevScript Directives)
+---
 
-DevScript files (`.dev`) are plain text files that define the AI's role, task, and project context using special `@` directives.
+## 🚀 Usage
 
-*   **`@role <persona>`**: Defines the persona the AI should adopt (e.g., `Senior Architect`, `Lead Developer`).
-*   **`@vibe <tone>`**: Sets the conversational tone of the AI (e.g., `Professional and comprehensive`, `Stoic, precise`).
-*   **`@tech <technology>`**: Specifies key technologies relevant to the project or task. Can be used multiple times.
-*   **`@rule <constraint>`**: Adds specific rules or constraints for the AI to follow during generation. Can be used multiple times.
-*   **`@test <assertion>`**: Defines test cases or validation logic the AI's output should satisfy. Can be used multiple times.
-*   **`@use <path/to/file_or_directory>`**: Includes files or entire directories into the project context for the AI. This directive supports recursive hydration. Can be used multiple times.
-*   **`@task`**: Initiates the task description for the AI. All subsequent lines until another `@` directive or the end of the file will be treated as the task.
+Run a DevScript file:
+```bash
+dev run <path/to/script.dev>
+```
 
-**Example `my_project.dev`:**
+### New Core Commands
+*   `devscript login` : Triggers the Google OAuth browser flow for Gemini.
+*   `devscript config set-engine <provider>` : Switches the active AI engine (gemini, openai, ollama).
+*   `devscript config set-key <provider> <key>` : Saves an API key for a specific provider.
+*   `devscript manifest [folder]` : Package, Consult AI, and Manifest files automatically using the active engine.
+
+### CLI Options
+*   `--screenshot`, `-s`: Capture a screen region before running for multimodal tasks.
+
+---
+
+## 📝 The DevScript Language (@Directives)
+
+### Core Directives
+| Directive | Description |
+| :--- | :--- |
+| `@role` | Defines the AI's persona (e.g., `Senior Security Engineer`). |
+| `@vibe` | Sets the tone (e.g., `Stoic`, `Brief`, `Pedantic`). |
+| `@tech` | Declares stack context (e.g., `React`, `Rust`, `Postgres`). |
+| `@use` | Hydrates files/folders into context (Recursive & Token-optimized). |
+| `@task` | The objective. All lines following this are treated as instructions. |
+
+### ClearPrompt: Strict Mode (Engineering Grade)
+These directives are designed to eliminate hallucinations and maximize token efficiency.
+
+| Directive | Purpose | Example |
+| :--- | :--- | :--- |
+| `@guard` | **Logic Fence**: Prevents inventions. | `@guard FACTS-ONLY` |
+| `@not` | **Forbidden Patterns**: Anti-pattern lock. | `@not No external libraries` |
+| `@limit` | **Boundaries**: Prevents scope creep. | `@limit Max 2 files modified` |
+| `@format` | **Structure**: Specific output shape. | `@format Return JSON only` |
+
+---
+
+## 💡 Example: Secure Refactor
+
+Create a file named `refactor.dev`:
 ```dev
-@role Technical Architect
-@vibe Professional and comprehensive
-@tech TypeScript
-@tech React
-@tech Ink
-@rule Maintain strict Novus Consultancy code standards.
-@use src/components/CommandTerminal.tsx
-@use src/core
+@role Technical Lead
+@vibe Professional, concise
+@tech TypeScript, Express
+
+@use src/routes/auth.ts
+@use src/middleware/validate.ts
+
+@guard FACTS-ONLY
+@guard NO-GUESS
+@not Do not add conversational filler.
+@not Do not suggest 'any' types.
+@limit Max 50 lines of code.
+
 @task
-Analyze the provided codebase for the DevScript Engine itself.
-Provide architectural feedback focusing on modularity, maintainability,
-and adherence to best practices. Suggest improvements where applicable.
-Specifically, review the context hydration mechanism.
+Analyze the auth route for potential timing attacks. 
+Provide a surgical fix if found.
 ```
 
-## File Structure
+Run it:
+```bash
+dev run refactor.dev
+```
 
-The DevScript Engine's codebase is structured for clarity and modularity:
+---
 
-*   **`src/components/`**: Contains reusable React components for the Ink-based terminal UI.
-    *   `CommandTerminal.tsx`: A core component for animated terminal output.
-*   **`src/core/`**: Houses the essential business logic of the engine.
-    *   `aggregateDevScripts.ts`: Combines data from multiple DevScript files.
-    *   `builder.ts`: Constructs the final prompt sent to the LLM, incorporating DevScript data and hydrated code.
-    *   `hydrator.ts`: Manages reading files and directories into the AI context, including recursive hydration and code compaction.
-    *   `parser.ts`: Parses `.dev` files to extract directives and task information.
-    *   `writer.ts`: Interprets the AI's generated response to write files to disk.
-*   **`src/services/`**: Integrations with external services.
-    *   `gemini.ts`: Handles communication with the Google Gemini API.
-*   **`src/ui/`**: Contains the main UI components that manage the application's state and presentation.
-    *   `RunCommandUI.tsx`: The primary interactive UI component for running DevScripts.
-*   **`src/util/`**: General utility functions.
-    *   `copyToClipboard.ts`: Platform-agnostic clipboard operations.
-    *   `getApiKey.ts`: Utility for retrieving the API key from various sources.
-*   **`src/index.ts`**: The entry point for the CLI application, handling argument parsing and initial setup.
+## 🛠️ Architecture
 
-## Recursive Directory Hydration
+*   **AuthService**: Handles Google OAuth2 loopback and encrypted configuration management.
+*   **Adapter Layer**: Standardizes AI requests across Gemini, OpenAI, and Ollama.
+*   **Engine Orchestrator**: Centralized AI request manager and provider switcher.
+*   **Writer**: Parses XML-style `<file>` tags from AI output to safely apply changes.
 
-A key feature of the DevScript Engine is its robust context hydration mechanism, powered by the `@use` directive in `.dev` files.
+---
 
-When an `@use` directive points to a directory, the `src/core/hydrator.ts` module intelligently traverses that directory **recursively**. It automatically identifies and includes all relevant code files (`.ts`, `.tsx`, `.js`, `.jsx`) and DevScript files (`.dev`). To prevent irrelevant or excessively large files from being sent to the LLM, the hydrator automatically excludes common development artifacts and dependency folders such as:
+## 🤝 Contributing
 
-*   `node_modules`
-*   `.git`
-*   `dist`
-*   `.next`
+Contributions are welcome! Please ensure you maintain the "Strict Mode" philosophy—DevScript is built to be a tool for engineers, not a general-purpose chat interface.
 
-Each file's content is also "compacted" using the `compactCode` function, which removes comments and excessive whitespace, optimizing the token count and focus for the LLM. This ensures that the AI receives a clean, concise, and comprehensive understanding of your project's structure and existing code without unnecessary overhead.
-
-This recursive hydration capability allows you to easily provide entire project modules or even your full codebase as context to the AI with a single `@use` directive, streamlining the process of getting detailed architectural feedback or code generation tasks.
+**Author**: Anguzu Daniel
+**License**: ISC

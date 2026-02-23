@@ -9,6 +9,10 @@ export function aggregateDevScripts(files: string[]): DevScriptData {
     role: "Senior Architect",
     vibe: "Stoic, professional",
     rules: [],
+    not: [],
+    guards: [],
+    format: "",
+    limit: "",
     tech: [],
     contextFiles: [],
     tests: [],
@@ -23,8 +27,12 @@ export function aggregateDevScripts(files: string[]): DevScriptData {
     if (parsed.role) master.role = parsed.role;
     if (parsed.vibe) master.vibe = parsed.vibe;
     if (parsed.task) master.task += `\n${parsed.task}`;
+    if (parsed.format) master.format = parsed.format;
+    if (parsed.limit) master.limit = parsed.limit;
     
     if (parsed.rules) master.rules.push(...parsed.rules);
+    if (parsed.not) master.not.push(...parsed.not);
+    if (parsed.guards) master.guards.push(...parsed.guards);
     if (parsed.contextFiles) master.contextFiles.push(...parsed.contextFiles);
     if (parsed.tests) master.tests.push(...parsed.tests);
   }

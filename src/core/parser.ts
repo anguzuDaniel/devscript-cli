@@ -3,10 +3,15 @@ export interface DevScriptData {
   vibe: string;
   tech: string[];
   rules: string[];
+  not: string[];
+  guards: string[];
+  format: string;
+  limit: string;
   tests: string[];
   contextFiles: string[];
   task: string;
 }
+
 export function parseDevScript(content: string): DevScriptData {
   const lines = content.split('\n');
   const data: DevScriptData = {
@@ -14,21 +19,29 @@ export function parseDevScript(content: string): DevScriptData {
     vibe: '',
     tech: [],
     rules: [],
+    not: [],
+    guards: [],
+    format: '',
+    limit: '',
     tests: [],
     contextFiles: [],
     task: ''
   };
+
   let capturingTask = false;
+
   for (const line of lines) {
     const trimmed = line.trim();
+
     if (capturingTask) {
       if (trimmed.startsWith('@')) {
-        capturingTask = false; 
+        capturingTask = false;
       } else {
         data.task += line + '\n';
-        continue; 
+        continue;
       }
     }
+
     if (trimmed.startsWith('@role')) {
       data.role = trimmed.replace('@role', '').trim();
       continue;
@@ -47,6 +60,24 @@ export function parseDevScript(content: string): DevScriptData {
       if (r) data.rules.push(r);
       continue;
     }
+    if (trimmed.startsWith('@not')) {
+      const n = trimmed.replace('@not', '').trim();
+      if (n) data.not.push(n);
+      continue;
+    }
+    if (trimmed.startsWith('@guard')) {
+      const g = trimmed.replace('@guard', '').trim();
+      if (g) data.guards.push(g);
+      continue;
+    }
+    if (trimmed.startsWith('@format')) {
+      data.format = trimmed.replace('@format', '').trim();
+      continue;
+    }
+    if (trimmed.startsWith('@limit')) {
+      data.limit = trimmed.replace('@limit', '').trim();
+      continue;
+    }
     if (trimmed.startsWith('@test')) {
       const t = trimmed.replace('@test', '').trim();
       if (t) data.tests.push(t);
@@ -58,10 +89,11 @@ export function parseDevScript(content: string): DevScriptData {
       continue;
     }
     if (trimmed.startsWith('@task')) {
-      capturingTask = true; 
+      capturingTask = true;
       continue;
     }
   }
-  data.task = data.task.trim(); 
+
+  data.task = data.task.trim();
   return data;
 }

@@ -14,7 +14,7 @@
     "outDir": "dist",
     "types": [],
     "allowJs": true,
-    "noEmit": true,
+    "noEmit": false,
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
