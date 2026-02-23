@@ -1,14 +1,15 @@
-
 import { OAuth2Client } from 'google-auth-library';
 import http from 'http';
 import url from 'url';
 import Conf from 'conf';
-import os from 'os';
 import path from 'path';
+import fs from 'fs';
 import chalk from 'chalk';
 
 interface AuthConfig {
   activeProvider: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
   providers: {
     [key: string]: {
       apiKey?: string;
@@ -20,18 +21,29 @@ interface AuthConfig {
 export class AuthService {
   private config: Conf<AuthConfig>;
   private oauth2Client: OAuth2Client;
-  private readonly CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-  private readonly CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+  
+  private get CLIENT_ID() {
+    return process.env.GOOGLE_CLIENT_ID || this.config.get('googleClientId') || '';
+  }
+  
+  private get CLIENT_SECRET() {
+    return process.env.GOOGLE_CLIENT_SECRET || this.config.get('googleClientSecret') || '';
+  }
+  
   private readonly REDIRECT_URI = 'http://localhost:3000/oauth2callback';
 
   constructor() {
+    // FORCE LOCAL STORAGE: Ensure the .devscript folder exists in the current project root
+    const localDir = path.join(process.cwd(), '.devscript');
+    if (!fs.existsSync(localDir)) {
+      fs.mkdirSync(localDir, { recursive: true });
+    }
+
     this.config = new Conf<AuthConfig>({
       projectName: 'devscript',
-      cwd: path.join(os.homedir(), '.devscript'),
+      cwd: localDir, // Use project-local folder
       configName: 'config',
-      // Simple encryption for the sake of the requirement. 
-      // In production, this key should be more securely handled.
-      encryptionKey: 'devscript-secret-key-1234567890',
+      encryptionKey: 'devscript-local-project-key-v2', // Project-specific encryption
       defaults: {
         activeProvider: 'gemini',
         providers: {
@@ -63,8 +75,22 @@ export class AuthService {
     this.config.set('providers', providers);
   }
 
+  /**
+   * TIERED LOGIC:
+   * 1. Check process.env.GEMINI_API_KEY (priority)
+   * 2. Check project-local ./.devscript/config.json
+   */
   public getApiKey(provider: string): string | undefined {
+    if (provider === 'gemini' && process.env.GEMINI_API_KEY) {
+      return process.env.GEMINI_API_KEY;
+    }
     return this.config.get('providers')[provider]?.apiKey;
+  }
+
+  public setGoogleCredentials(clientId: string, clientSecret: string): void {
+    this.config.set('googleClientId', clientId);
+    this.config.set('googleClientSecret', clientSecret);
+    this.oauth2Client = new OAuth2Client(clientId, clientSecret, this.REDIRECT_URI);
   }
 
   public getTokens(provider: string): any {
@@ -78,7 +104,6 @@ export class AuthService {
     }
     this.oauth2Client.setCredentials(tokens);
 
-    // Handle token expiration/refresh
     this.oauth2Client.on('tokens', (newTokens) => {
       if (newTokens.refresh_token) {
         const providers = this.config.get('providers');
@@ -94,23 +119,22 @@ export class AuthService {
 
   public async loginWithGoogle(): Promise<void> {
     if (!this.CLIENT_ID || !this.CLIENT_SECRET) {
-      console.error(chalk.red('❌ Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET in environment.'));
+      console.error(chalk.red('❌ Missing Google Credentials. Set them with: devscript config set-google-creds <id> <secret>'));
       return;
     }
 
     const authorizeUrl = this.oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/generative-language'],
+      scope: ['https://www.googleapis.com/auth/generative-language'],
       prompt: 'consent'
     });
 
     console.log(chalk.cyan('◈ Opening browser for Google login...'));
     console.log(chalk.dim(`Link: ${authorizeUrl}`));
 
-    // Start local loopback server
     const server = http.createServer(async (req, res) => {
       try {
-        if (req.url?.indexOf('/oauth2callback') && req.url?.indexOf('/oauth2callback') > -1) {
+        if (req.url?.includes('/oauth2callback')) {
           const qs = new url.URL(req.url, 'http://localhost:3000').searchParams;
           const code = qs.get('code');
 
@@ -125,7 +149,7 @@ export class AuthService {
               this.config.set('providers', providers);
             }
 
-            console.log(chalk.green('✔ Successfully logged in with Google.'));
+            console.log(chalk.green('✔ Successfully logged in with Google (Tokens saved locally).'));
           }
         }
       } catch (e) {
@@ -134,8 +158,5 @@ export class AuthService {
         server.close();
       }
     }).listen(3000);
-
-    // In a real CLI, we would use 'open' package to open the browser.
-    // For now, the user can click the link.
   }
 }

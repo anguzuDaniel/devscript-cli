@@ -101,10 +101,26 @@ config
 
 config
   .command('set-key <provider> <key>')
-  .description('Saves an API key for a specific provider')
+  .description('Saves an API key locally to ./.devscript/config.json')
   .action((provider, key) => {
     engine.getAuthService().setApiKey(provider, key);
-    console.log(chalk.green(`✔ API key saved for ${provider}`));
+    console.log(chalk.green(`✔ API key saved for ${provider} in local ./.devscript folder.`));
+  });
+
+config
+  .command('use <provider>')
+  .description('Switches the active provider for the current project')
+  .action((provider) => {
+    engine.getAuthService().setActiveProvider(provider);
+    console.log(chalk.green(`✔ Active provider switched to: ${provider}`));
+  });
+
+config
+  .command('set-google-creds <clientId> <clientSecret>')
+  .description('Sets the Google OAuth2 credentials')
+  .action((clientId, clientSecret) => {
+    engine.getAuthService().setGoogleCredentials(clientId, clientSecret);
+    console.log(chalk.green('✔ Google credentials saved successfully.'));
   });
 
 // ◈ Command: Run (Standalone UI)
