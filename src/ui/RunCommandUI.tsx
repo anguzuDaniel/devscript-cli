@@ -1,235 +1,284 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Text, Box, useInput, useApp } from 'ink';
 import fs from 'fs';
 import path from 'path';
-import { parseDevScript } from '../core/parser.js';
+import Spinner from 'ink-spinner';
+import { parseDevScript, type DevScriptData } from '../core/parser.js';
 import { hydrateContext } from '../core/hydrator.js';
 import { askGemini } from '../services/gemini.js';
 import { buildFinalPrompt } from '../core/builder.js';
-import Spinner from 'ink-spinner';
+import { applyChanges } from '../core/writer.js';
+import { exec } from 'child_process';
+import { CommandTerminal } from '../components/CommandTerminal.js';
+import chalk from 'chalk'; // For direct chalk usage if needed, though Ink handles colors
 
-export const RunCommandUI = ({ filePath }: { filePath: string }) => {
+interface RunCommandProps {
+  filePath: string;
+  hasImage?: boolean;
+}
+
+export const RunCommandUI: React.FC<RunCommandProps> = ({ filePath, hasImage }) => {
   const { exit } = useApp();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<DevScriptData | null>(null);
   const [hydratedCode, setHydratedCode] = useState<string>("");
-  const [aiResponse, setAiResponse] = useState<string>("");
-  const [isThinking, setIsThinking] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState("");
-  const [tokenEstimate, setTokenEstimate] = useState(0);
+  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
+  const [isThinking, setIsThinking] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [currentStatus, setCurrentStatus] = useState<string>("");
 
-  useEffect(() => {
-    // Rough estimate: 4 chars = 1 token
-    setTokenEstimate(Math.ceil(hydratedCode.length / 4));
-  }, [hydratedCode]);
+  // Memoize token estimation for performance
+  const tokenEstimate: number = useMemo(() => Math.ceil(hydratedCode.length / 4), [hydratedCode]);
 
-  // --- 1. THE AGENT: Apply Changes logic ---
-  const applyChanges = useCallback((response: string) => {
-    const regex = /<file path="([^"]+)">([\s\S]*?)<\/file>/g;
-    let match;
-    let count = 0;
-
-    while ((match = regex.exec(response)) !== null) {
-      const [, targetPath, content] = match;
-      if (targetPath && content !== undefined) {
-        try {
-          const dir = path.dirname(targetPath);
-          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-          fs.writeFileSync(targetPath, content.trim());
-          count++;
-        } catch (err) {
-          console.error(`Error writing ${targetPath}:`, err);
-        }
-      }
-    }
-    return count;
+  // Callback to append lines to the terminal output
+  const appendToTerminal = useCallback((line: string) => {
+    setTerminalOutput(prev => [...prev, line]);
   }, []);
 
-  // --- 2. THE ENGINE: Execute Gemini Logic ---
-  const handleRun = useCallback(async () => {
-    if (!data || !hydratedCode) return;
+  // Callback to clear the terminal output
+  const clearTerminal = useCallback(() => {
+    setTerminalOutput([]);
+  }, []);
 
-    const apiKey = process.env.GEMINI_API_KEY;
+  // Handler for initiating the AI command run
+  const handleRun = useCallback(async () => {
+    // Early return if data or hydrated context is missing
+    if (!data || !hydratedCode) {
+      appendToTerminal("❌ Error: DevScript data or hydrated context is missing. Cannot run.");
+      return;
+    }
+
+    clearTerminal(); // Clear previous output
+    appendToTerminal('◈ DEVSCRIPT ENGINE v2.0 ◈');
+    appendToTerminal(`devscript $ devrun ${path.basename(filePath)}`);
+
+    const apiKey: string | undefined = process.env.GEMINI_API_KEY; // Explicitly type API key
+    // Early return if API key is not found
     if (!apiKey) {
-      setAiResponse("❌ Error: No API Key found in .env");
+      appendToTerminal("❌ Error: GEMINI_API_KEY not found in .env. Please configure your API key.");
+      exec('say "API key missing. Configuration required."');
       return;
     }
 
     setIsThinking(true);
-    setAiResponse("");
-    setSaveStatus("");
+    appendToTerminal("Generating architectural response...");
+    setCurrentStatus("Generating...");
 
     try {
-      const finalPrompt = buildFinalPrompt(data, hydratedCode);
-      const response = await askGemini(finalPrompt, apiKey);
-      if (!response) throw new Error("Empty response from Gemini");
-      setAiResponse(response);
-    } catch (err: any) {
-      setAiResponse(`❌ Execution Failed: ${err.message || "Unknown Error"}`);
+      const finalPrompt: string = buildFinalPrompt(data, hydratedCode);
+      const response: string = await askGemini(finalPrompt, apiKey);
+      appendToTerminal("\n--- AI RESPONSE ---");
+      response.split('\n').forEach((line: string) => appendToTerminal(line));
+      exec('say "Processing complete. Review the output architect."'); // Announce completion
+      setCurrentStatus("Generation complete. Press 'a' to apply changes.");
+    } catch (err: unknown) {
+      const error = err as Error; // Type assertion for error handling
+      appendToTerminal(`❌ Execution Failed: ${error.message}`);
+      setCurrentStatus(`Execution Failed: ${error.message}`);
     } finally {
-      setIsThinking(false);
+      setIsThinking(false); // Reset thinking state
     }
-  }, [data, hydratedCode]);
+  }, [data, hydratedCode, filePath, appendToTerminal, clearTerminal]);
 
-  // --- 3. THE CONTROLS: Global Input Listener ---
-  useInput((input, key) => {
-    if (input === 'q') exit();
-
-    if (key.return && !loading && !isThinking) {
-      handleRun();
-    }
-
-    if (input === 'a' && aiResponse) {
-      const count = applyChanges(aiResponse);
-      setSaveStatus(`🚀 Applied ${count} changes to disk.`);
+  // Handler for applying AI-generated changes to disk
+  const handleApply = useCallback(() => {
+    // Early return if system is busy
+    if (isThinking) {
+      setCurrentStatus("System is busy. Cannot apply changes while generating.");
+      return;
     }
 
-    if (input === 's' && aiResponse) {
-      fs.writeFileSync(`dev-output-${Date.now()}.md`, aiResponse);
-      setSaveStatus("📝 Saved full response to markdown.");
+    const aiResponseStartIndex: number = terminalOutput.indexOf("--- AI RESPONSE ---");
+    // Early return if AI response marker is not found or is at the end
+    if (aiResponseStartIndex === -1 || aiResponseStartIndex === terminalOutput.length - 1) {
+      setCurrentStatus("No AI response found in terminal to apply.");
+      return;
+    }
+
+    const rawAiResponse: string = terminalOutput.slice(aiResponseStartIndex + 1).join('\n');
+    // Early return if AI response content is empty
+    if (!rawAiResponse.trim()) {
+      setCurrentStatus("AI response is empty. No content to apply.");
+      return;
+    }
+
+    setCurrentStatus("Applying changes...");
+    const results = applyChanges(rawAiResponse); // Apply changes to file system
+    const successfulWrites: number = results.filter(r => r.success).length;
+
+    if (successfulWrites > 0) {
+      appendToTerminal(`\n🚀 Successfully applied changes for ${successfulWrites} files.`);
+      exec(`say "Build successful. ${successfulWrites} files synchronized."`); // Announce build success
+      setCurrentStatus(`🚀 Built ${successfulWrites} files.`);
+    } else {
+      appendToTerminal("⚠️ No files were created or modified.");
+      setCurrentStatus("⚠️ No files built.");
+    }
+  }, [terminalOutput, isThinking, appendToTerminal]);
+
+  // Handle user input (keyboard shortcuts)
+  useInput((input: string, key) => {
+    // Quit application on 'q'
+    if (input === 'q') {
+        exit();
+        return;
+    }
+    // Run command on Enter, if not already thinking
+    if (key.return && !isThinking) {
+        handleRun();
+        return;
+    }
+    // Apply changes on 'a', if not already thinking
+    if (input === 'a' && !isThinking) {
+        handleApply();
+        return;
+    }
+    // 's' for Save (currently a placeholder)
+    if (input === 's') {
+        setCurrentStatus("Saving functionality pending implementation (e.g., saving session logs or prompt).");
+        exec('say "Save feature not yet implemented."');
     }
   });
 
-  // --- 4. THE BOOTLOADER: Initialization ---
+  // Effect for initial data loading and file watching
   useEffect(() => {
-      let isMounted = true;
+    let isMounted: boolean = true; // Flag to prevent state updates on unmounted component
 
-      // We pull the init logic into a reusable function
-      const loadData = async () => {
-        try {
-          if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
-          
-          const rawContent = fs.readFileSync(filePath, 'utf-8');
-          const parsed = parseDevScript(rawContent);
-          const filesToHydrate = parsed.contextFiles || [];
-          const fullContext = await hydrateContext(filesToHydrate);
-          
-          if (isMounted) {
-            setData(parsed);
-            setHydratedCode(fullContext);
-            setLoading(false);
-            // Optional: clear status so you know it reloaded
-            setSaveStatus("🔄 Context reloaded from disk.");
-            setTimeout(() => setSaveStatus(""), 2000);
-          }
-        } catch (e: any) {
-          if (isMounted) {
-            setAiResponse(`❌ Reload Failed: ${e.message}`);
-            setLoading(false);
-          }
-        }
-      };
-
-      // Initial load
-      loadData();
-
-      // ◈ The Watcher: Listens for file changes
-      let watcher: fs.FSWatcher | undefined; // Declare as potentially undefined for defensive check
+    const loadData = async () => {
+      appendToTerminal(`Loading DevScript from ${path.basename(filePath)}...`);
       try {
-        watcher = fs.watch(filePath, (eventType) => {
-          if (eventType === 'change') {
-            loadData();
-          }
-        });
-      } catch (error: unknown) {
-        // Log errors during watcher setup (e.g., permissions issues)
-        console.error(`Error setting up file watcher for '${filePath}':`, (error as Error).message);
-      }
-      
-
-      return () => {
-        isMounted = false;
-        if (watcher) { // Only close if watcher was successfully initialized
-          watcher.close();
+        // Early return if file does not exist
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`DevScript file not found at ${filePath}`);
         }
-      };
-    }, [filePath]);
 
-    const ErrorPanel = ({ message }: { message: string }) => (
-      <Box flexDirection="column" padding={1} borderStyle="bold" borderColor="red">
-        <Text color="red" bold>◈ ENGINE ERROR ◈</Text>
-        <Box marginTop={1}>
-          <Text color="white">{message}</Text>
+        const rawContent: string = fs.readFileSync(filePath, 'utf-8');
+        const parsed: DevScriptData = parseDevScript(rawContent);
+
+        if (parsed.contextFiles.length > 0) {
+            appendToTerminal(`Hydrating context from ${parsed.contextFiles.length} source(s)...`);
+        } else {
+            appendToTerminal(`No @use directives found. Hydration skipped.`);
+        }
+        const fullContext: string = await hydrateContext(parsed.contextFiles);
+
+        // Update state only if component is still mounted
+        if (!isMounted) return;
+        setData(parsed);
+        setHydratedCode(fullContext);
+        setLoading(false);
+        appendToTerminal(`Context hydrated. Ready for generation.`);
+        setCurrentStatus("System Ready. Press Enter to generate.");
+      } catch (e: unknown) {
+        const error = e as Error; // Type assertion for error handling
+        if (isMounted) {
+          appendToTerminal(`❌ Load Failed: ${error.message}`);
+          setCurrentStatus(`❌ Load Failed: ${error.message}`);
+        }
+      }
+    };
+
+    loadData(); // Initial data load
+
+    // Set up file watcher for the DevScript file
+    const watcher = fs.watch(filePath, (event: string) => {
+      if (event === 'change') {
+        appendToTerminal(`--- File change detected in ${path.basename(filePath)}. Reloading...`);
+        loadData(); // Reload data on file change
+      }
+    });
+
+    // Cleanup watcher on component unmount
+    return () => {
+      isMounted = false;
+      watcher.close();
+    };
+  }, [filePath, appendToTerminal]); // Re-run effect if filePath or appendToTerminal changes
+
+  // Loading UI state
+  if (loading) {
+    return (
+      <Box flexDirection="column" padding={1} width="100%" >
+        <Text color="cyan" bold>◈ DEVSCRIPT ENGINE v2.0 ◈</Text>
+        <Box marginTop={1} paddingX={1} borderStyle="single" borderColor="yellow">
+          <Text color="yellow"><Spinner type="dots" /> Hydrating Context and DevScript...</Text>
         </Box>
-        <Text color="dim">Check your .env or .dev syntax | [q] Quit</Text>
+        <Box marginTop={1} height={10} overflow="hidden">
+          <CommandTerminal lines={terminalOutput} speed={5} delay={100} isDemo={true} color="slate.300" />
+        </Box>
       </Box>
     );
-
-    // Use this in your render:
-    if (aiResponse.startsWith("❌")) {
-      return <ErrorPanel message={aiResponse} />;
-    }
-
-
-  if (tokenEstimate > 100000) {
-    setAiResponse("❌ CONTEXT OVERLOAD: Your 'src' folder is too large. Use specific files instead of the whole directory.");
-    return;
   }
 
-  // --- 5. THE VIEW ---
-  if (loading) return <Text color="yellow">◈ Loading DevScript Context...</Text>;
-
+  // Main UI state
   return (
-    <Box flexDirection="column" padding={1}>
-      {/* ◈ Header */}
+    <Box flexDirection="column" padding={1} width="100%">
       <Box marginBottom={1} justifyContent="center" borderStyle="double" borderColor="cyan">
         <Text color="cyan" bold> ◈ DEVSCRIPT ENGINE v2.0 ◈ </Text>
       </Box>
 
       <Box flexDirection="row">
-        {/* ◈ Sidebar: Metadata */}
-        <Box flexDirection="column" width="30%" paddingRight={2} borderStyle="round" borderColor="magenta">
-          <Text color="magenta" bold underline>ARCHITECT</Text>
-          <Text> <Text color="gray">Role:</Text> {data?.role} </Text>
-          <Text> <Text color="gray">Vibe:</Text> {data?.vibe} </Text>
-          
+        {/* Left Panel: Architect Info & Stack */}
+        <Box flexDirection="column" width="30%" paddingRight={2} borderStyle="round" borderColor="slate.700" marginRight={1}>
+          <Text color="cyan" bold underline>ARCHITECT</Text>
+          <Text color="slate.300"> <Text color="slate.500">Role:</Text> {data?.role || 'Undefined'} </Text>
+          <Text color="slate.300"> <Text color="slate.500">Vibe:</Text> {data?.vibe || 'Undefined'} </Text>
+
           <Box marginTop={1} flexDirection="column">
-            <Text color="yellow" bold underline>STACK & RULES</Text>
-            {data?.tech.map((t: string) => <Text key={t}>• {t}</Text>)}
-            {data?.rules.map((r: string) => <Text key={r} color="dim">→ {r}</Text>)}
+            <Text color="cyan" bold underline>STACK</Text>
+            {data?.tech && data.tech.length > 0
+              ? data.tech.slice(0, 5).map((t: string) => <Text key={t} color="slate.300">• {t}</Text>)
+              : <Text color="slate.500">None Specified</Text>}
           </Box>
 
-          <Box marginTop={1}>
-            <Text color="cyan">Context: {hydratedCode.length} ch</Text>
-          </Box>
-
-          <Box marginTop={1} flexDirection="column" borderStyle="classic" borderColor="yellow">
-            <Text color="yellow" bold> ⚡ MENTAL ENERGY </Text>
-            <Text> Chars: {hydratedCode.length.toLocaleString()} </Text>
-            <Text> Tokens: ~{tokenEstimate.toLocaleString()} </Text>
-            
-            {tokenEstimate > 30000 && (
-              <Text color="red" backgroundColor="white"> ⚠️ HIGH LOAD </Text>
-            )}
+          <Box marginTop={1} flexDirection="column" borderStyle="classic"
+               borderColor={tokenEstimate > 30000 ? "red" : (tokenEstimate > 10000 ? "yellow" : "green")}
+          >
+            <Text color="cyan" bold> ⚡ ENERGY </Text>
+            <Text color="slate.300"> Tokens: ~{tokenEstimate.toLocaleString()} </Text>
+            {hasImage && <Text color="cyan">📸 Image Attached (Vision Model)</Text>}
           </Box>
         </Box>
 
-        {/* ◈ Main Panel: Response Area */}
-        <Box flexDirection="column" width="70%" paddingLeft={1}>
-          <Box paddingX={1} borderStyle="single" borderColor={isThinking ? "yellow" : "green"}>
-            {isThinking && (
-              <Text color="yellow">
-              <Spinner type="dots" /> <Text italic>Thinking...</Text>
-            </Text>
+        {/* Right Panel: Terminal Output */}
+        <Box flexDirection="column" width="70%" paddingLeft={1} borderStyle="round" borderColor="slate.700">
+          <Text color="cyan" bold underline>TERMINAL OUTPUT</Text>
+          <Box height={15} overflow="hidden"> {/* Container for the CommandTerminal to manage height */}
+            {isThinking ? (
+              <Box paddingX={1}>
+                <Text color="yellow"><Spinner type="dots" /> {currentStatus}</Text>
+                {/* CommandTerminal itself has the glowing border */}
+                <CommandTerminal lines={terminalOutput} speed={5} delay={100} isDemo={true} color="gray" />
+              </Box>
+            ) : (
+              <Box paddingX={1} >
+                <CommandTerminal lines={terminalOutput} speed={5} delay={100} isDemo={true} color="gray" />
+              </Box>
             )}
           </Box>
-
-          {aiResponse && (
-            <Box marginTop={1} height={15} borderStyle="round" borderColor="gray" paddingX={1}>
-              <Text color="white">{aiResponse.split('\n').slice(0, 12).join('\n')}</Text>
-            </Box>
-          )}
+          {currentStatus && <Text color="cyan" bold>{currentStatus}</Text>}
         </Box>
       </Box>
 
-      {/* ◈ Footer: Controls */}
-      <Box marginTop={1} paddingX={1} borderStyle="single" borderColor="blue">
-        <Text color="white" bold> [Enter] Run | [a] Apply | [s] Save | [q] Quit </Text>
-        <Box flexGrow={1} />
-        <Text color="white">{path.basename(filePath)}</Text>
+      {/* Bottom Panel: Actions and Status */}
+      <Box marginTop={1} paddingX={1} borderStyle="single"
+           borderColor={isThinking ? "yellow" : "cyan"} // Glowing border for active state
+           justifyContent="space-between"
+           >
+        <Box flexDirection="row">
+          <Text color="slate.300" bold> [</Text>
+          <Text color={!isThinking ? "cyan" : "slate.500"} bold>Enter</Text><Text color="slate.300">] Run </Text>
+          <Text color="slate.300" bold> | [</Text>
+          <Text color={!isThinking ? "cyan" : "slate.500"} bold>a</Text><Text color="slate.300">] Apply </Text>
+          <Text color="slate.300" bold> | [</Text>
+          <Text color={"slate.500"} bold>s</Text><Text color="slate.300">] Save </Text>
+          <Text color="slate.300" bold> | [</Text>
+          <Text color="cyan" bold>q</Text><Text color="slate.300">] Quit </Text>
+          <Text color="slate.300" bold>]</Text>
+        </Box>
+        <Box>
+            <Text color="slate.500">{path.basename(filePath)}</Text>
+        </Box>
       </Box>
-
-      
     </Box>
   );
 };

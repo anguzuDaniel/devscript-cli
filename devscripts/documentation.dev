@@ -1,9 +1,25 @@
 @role Technical Architect
 @vibe Professional and comprehensive
-@rule Include sections for: Installation, Usage, @Keywords, and File Structure
 @use src/
 
-@task
-Analyze the code context. Update the README.md to 
-fully document the DevScript Engine v2.0. Ensure 
-the new directory hydration feature is explained.
+@rule Include sections for: Installation, Usage, @Keywords, and File Structure.
+@rule Detail the 'Recursive Directory Hydration' feature specifically.
+@rule Maintain strict Novus Consultancy code standards.
+
+# PROJECT CONTEXT
+The following code has been hydrated from your @use directives:
+{{HYDRATED_CONTEXT}}
+
+# FORBIDDEN PATTERNS
+[BLOCK]: Do not use 'any' in TypeScript; use strict interfaces.
+[BLOCK]: Avoid nested if-statements; use early returns.
+[BLOCK]: Do not provide conversational 'fluff'—provide code only.
+
+# OBJECTIVE
+Analyze the provided core engine code. Update the README.md to 
+fully document the DevScript Engine v2.0. 
+
+MANDATORY: 
+1. Explain how the '@use' tag now handles directory trees.
+2. Provide the solution ONLY in <file path="..."> tags.
+3. No conversational filler.
